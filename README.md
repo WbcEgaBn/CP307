@@ -1,29 +1,15 @@
 # CP307
 
-### Graph Class (Adjacency Matrix Implementation)
+### Quality Analysis Tests
 
-This class provides a Graph data structure implemented in Python using **NumPy**.  
-It supports creating a graph from a list of nodes and edges, and provides operations for adding/removing nodes, adding/removing edges (with optional weights), and retrieving the adjacency matrix.
+This file provides a series of tests that are based off the **Louvain Method**, **Girvan-Newman Method**, and the **Infomap Algorithm** which were implemented in Python using the help of **NetworkX**.  
 
 ---
+### File Structure
+- ```quality_analysis_test.py```
+- ```louvain.py```
+- ```girvan_newman.py```
+- ```infomap.py```
 
-## Class Structure
-
-```python
-import numpy as np
-
-class Graph:
-    def __init__(self, nodes, edges):
-        ...
-    def add_node(self, node):
-        ...
-    def remove_node(self, node):
-        ...
-    def add_edge(self, edge):
-        ...
-    def remove_edge(self, edge):
-        ...
-    def get_matrix(self):
-        ...
-    def get_nodes(self):
-        ...
+---
+Please make sure your algorithms can handle different types of graphs. There will not be any disconnected or directed graphs. Tests will be done on sparse graphs (E≈V) and dense graphs (E≈V^2). Methods should look to return the algorithm's compute time, and a dictionary with keys being the index and values being the vertices.
