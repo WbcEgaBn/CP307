@@ -1,8 +1,24 @@
+import time
+import tracemalloc
+import copy
 import networkx as nx
-def louvain_algorithm(G):
 
-    # takes in a networkX graph
-    # statistics for testing 
+def louvain_algorithm(G, delta_q=0.001, time_limit=None):
+    """
+    Args:
+        G: NetworkX graph
+        delta_q: Minimum modularity gain threshold to accept a move (default: 0.001) the smaller the number the more communities
+        time_limit: time limit in seconds to capture intermediate state
+        
+    Returns:
+        dict: Contains 'communities', 'execution_time', 'memory_used', 
+              and optionally 'graph_at_time_limit' if time_limit is specified
+    """
+    # Start tracking time and memory
+    start_time = time.time()
+    tracemalloc.start()
+    
+    # Statistics for testing 
     stats = {
         'modularity_calculations': 0,
         'node_moves': 0,
@@ -10,15 +26,19 @@ def louvain_algorithm(G):
         'iterations': 0
     }
     
+    # Variables for time limit tracking
+    intermediate_state = None
+    time_limit_reached = False
+    
     # Start with each node in its own community
     node_to_community = {node: node for node in G.nodes()}
     
     # Calculate total weight of graph (for modularity)
     m = G.size(weight='weight')
     if m == 0:  # Handle graph with no edge weights 
-        m = size(G.nodes) # is graph has no edge weights then all edges have weight 1
+        m = len(G.edges())  # If graph has no edge weights then all edges have weight 1
 
-    #actual algorithm begins
+    # Actual algorithm begins
     improved = True
     
     # Keep going until no improvement
@@ -31,6 +51,17 @@ def louvain_algorithm(G):
         while changed:
             stats['iterations'] += 1
             changed = False
+            
+            # Check if time limit reached
+            if time_limit and not time_limit_reached:
+                elapsed = time.time() - start_time
+                if elapsed >= time_limit:
+                    time_limit_reached = True
+                    # Save intermediate state
+                    intermediate_state = {
+                        'node_to_community': copy.deepcopy(node_to_community),
+                        'elapsed_time': elapsed
+                    }
             
             # Try moving each node to a better community
             for node in G.nodes():
@@ -53,27 +84,36 @@ def louvain_algorithm(G):
                 
                 for comm in neighbor_comms:
                     # Calculate modularity gain if we move to this community
-                    gain = calculate_modularity_gain( G, node, comm, node_to_community, m)
+                    gain = calculate_modularity_gain(G, node, comm, node_to_community, m)
                     stats['modularity_calculations'] += 1
                     
                     if gain > best_gain:
                         best_gain = gain
                         best_comm = comm
                 
-                # Move node if we found a better community
-                if best_comm != current_comm and best_gain > 0:
+                # Move node if we found a better community and gain exceeds delta_q
+                if best_comm != current_comm and best_gain > delta_q:
                     node_to_community[node] = best_comm
                     changed = True
                     improved = True
                     stats['node_moves'] += 1
         
-    """
+        # Uncomment to enable Phase 2 (hierarchical aggregation)
+        """
         # Phase 2: Build a new graph where each community becomes a node (aggregation) 
         if improved:
             G = build_community_graph(G, node_to_community)
             # Update node_to_community for the new graph
             node_to_community = {node: node for node in G.nodes()}
-    """
+        """
+    
+    # Stop tracking time and memory
+    execution_time = time.time() - start_time
+    current, peak = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    
+    # Convert to KB for better precision with small memory usage
+    memory_used_kb = peak / 1024
     
     # Convert final node_to_community to the requested format
     communities = {}
@@ -81,8 +121,31 @@ def louvain_algorithm(G):
         if comm not in communities:
             communities[comm] = []
         communities[comm].append(node)
-
-    return communities, stats
+    
+    # Prepare result dictionary
+    result = {
+        'communities': communities,
+        'execution_time': execution_time,
+        'memory_used_kb': memory_used_kb,  # Memory in KB
+        'memory_used_bytes': peak,  # Also provide raw bytes
+        'stats': stats
+    }
+    
+    # Add intermediate state if time limit was specified and reached
+    if time_limit and intermediate_state:
+        # Convert intermediate node_to_community to communities format
+        intermediate_communities = {}
+        for node, comm in intermediate_state['node_to_community'].items():
+            if comm not in intermediate_communities:
+                intermediate_communities[comm] = []
+            intermediate_communities[comm].append(node)
+        
+        result['graph_at_time_limit'] = {
+            'communities': intermediate_communities,
+            'elapsed_time': intermediate_state['elapsed_time']
+        }
+    
+    return result
 
 
 def calculate_modularity_gain(G, node, target_comm, node_to_community, m):
@@ -116,8 +179,9 @@ def calculate_modularity_gain(G, node, target_comm, node_to_community, m):
     ki = G.degree(node, weight='weight')
     
     # Modularity gain formula
-    # Δ Q = [ki_in - (sigma_tot * ki) / (2m)] / (2m)
-    gain = (ki_in - (sigma_tot * ki) / (2 * m)) / (2 * m)
+    # Δ Q = [ki_in / (2m)] - [(sigma_tot * ki) / (2m)²]
+    # Simplified: Δ Q = [ki_in - (sigma_tot * ki) / (2m)] / m
+    gain = (ki_in - (sigma_tot * ki) / (2 * m)) / m
     
     return gain
 
@@ -134,7 +198,6 @@ def build_community_graph(G, node_to_community):
     Returns:
         A new NetworkX graph where nodes represent communities
     """
-    
     # Create new graph
     new_G = nx.Graph()
     
@@ -163,20 +226,27 @@ def build_community_graph(G, node_to_community):
     
     return new_G
 
-# Create a simple test graph
-G = nx.karate_club_graph()
-nx.draw_networkx(G)
+"""
+G = nx.gnp_random_graph(n=200, p=0.05)
 
-# Run Louvain algorithm
-communities, stats = louvain_algorithm(G)
+# Run with delta_q threshold
+result = louvain_algorithm(G, delta_q=0.0001, time_limit=1)
 
-# Print results
-print("Communities found:")
-for comm_id, nodes in communities.items():
-    print(f"Community {comm_id}: {nodes}")
+print(f"Communities: {len(result['communities'])}")
+communities = result['communities']
+for community_id, nodes in communities.items():
+    print(f"Community {community_id}: {nodes}")
 
-print(f"\nStatistics:")
-print(f"  Total phases: {stats['phases']}")
-print(f"  Total iterations: {stats['iterations']}")
-print(f"  Node moves: {stats['node_moves']}")
-print(f"  Modularity calculations: {stats['modularity_calculations']}")
+print(f"Execution Time: {result['execution_time']:.4f} seconds")
+print(f"Memory Used: {result['memory_used_kb']:.2f} KB ({result['memory_used_bytes']} bytes)")
+print(f"Number of Communities: {len(result['communities'])}")
+print(f"Statistics: {result['stats']}")
+
+if 'graph_at_time_limit' in result:
+    print(f"\nIntermediate state at {result['graph_at_time_limit']['elapsed_time']:.4f}s:")
+    print(f"Communities at time limit: {len(result['graph_at_time_limit']['communities'])}")
+    communities = result['graph_at_time_limit']['communities']
+    for community_id, nodes in communities.items():
+        print(f"Community {community_id}: {nodes}")
+
+"""
