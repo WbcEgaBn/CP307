@@ -1,15 +1,18 @@
-#need a graph, maybe that is sent in - we should be working on the same graph - maybe this task can belong to joshua or someone else
-
 import networkx as nx
-import random
-import time
-import tracemalloc
-#Girvan Newman:
-#compute the edge betweeness
-#identify and remove the edge with max betweeness
-#recompute the edge betweeness
-#
 
+import time
+import datetime
+import tracemalloc
+
+#### Girvan Newman:
+## 1. compute the edge betweeness
+## 2. identify and remove the edge with max betweeness
+## 3. recompute the edge betweeness
+#NOTE: Due to my own version of the girvan newman being too slow, this code only utilizes the package
+# networkx has for bwtweeness centrality. Therfore, some of my methods are commented out for timing sake.
+
+
+"""
 class QBag():
     def __init__(self):
         self.n = []
@@ -78,6 +81,7 @@ def BFS(g, u,v, qb):
 
 
 
+
 def shortestPath(gr):
     #wait till class time to start this part
     #breadth first search BFS
@@ -130,40 +134,47 @@ def calculateB(shrtLst, g):
      
     return bwt_cen, egs
 
-
-def removeEdge(bw_edge, gr, edgs):
+"""
+#### removeEdge ####
+# this method partitions th graph by removing the edge with the highest centrality each time
+# it is called
+# bw_edge: a dictionary of edges(key) and their betweeness centrality (value)
+# gr: the networkx graph
+# returns: gr
+def removeEdge(bw_edge, gr):
     #edges with the most betweenes are removed - but one at a time and then recalculate between
-    # but what is removing doing - how does it split?
+   
     bw_max = 0
     edgeIdx = -1
-    bt = {}
     
-    for i in range(len(bw_edge)):
+    
+    for bw in bw_edge:
         
 
-        if bw_edge[edgs[i]] > bw_max:
-            bw_max = bw_edge[edgs[i]]
-            edgeIdx = i
-        
+        if bw_edge[bw] > bw_max:
+            bw_max = bw_edge[bw]
+            edgeIdx = bw
     
     #remove the edge with highest betweeness centrality
     
         
-    edg = [k for k,v in bw_edge.items() if v == bw_edge[edgs[edgeIdx]]]
+    edg = [k for k,v in bw_edge.items() if v == bw_edge[edgeIdx]]
     if len(edg) != 0:
-        gr.remove_edge(edg[0][0], edg[0][1]) #right we only want the first edge that has this high score
+        gr.remove_edge(edg[0][0], edg[0][1]) #we only want the first edge that has this high score
 
-    #bw_edge.remove(edgeIdx)
 
-    return gr #should we return it back or no???
-        #need something to redraw the graph
+    return gr #return the partitoned graph back
     
 
     
-
+#### showCommunity ####
+# this method creates a dictionary of the communities based on of the connected 
+# components in the graph
+# graph: the networkx graph
+#  communities: a dictionary of communities(key) and their respective nodes (value)
+# returns: communities
 def showCommunity(graph):
-    #show the communites it has split into
-    #use the find neighbors - right?
+    #show the communites/components it has split into
     #
     coms = nx.connected_components(graph)
     communities = {}
@@ -176,60 +187,92 @@ def showCommunity(graph):
     return communities
     
 
-
-def GirvanNewman(gh):
+#### GirvanNewman Method: ####
+# this is where all the code gets ran with NO time limit
+# gh: the networkx graph
+# k: the number of components desired??
+# com: a dictionary of communities(key) and their respective nodes (value)
+# tTotal:  the total amount of time to run the code in seconds (float)
+# mem: the amount of memory used to run the code
+# return: com, tTotal, mem
+def GirvanNewman(gh, k):
     #where we run the whole thing!
     
     st = time.time()
     tracemalloc.start()
     
     
-    p = shortestPath(gh)
-    #print(p)
-    #^^shortestPath seems to work
+    
+    bt = nx.edge_betweenness_centrality(gh)
+    gh = removeEdge(bt, gh)
 
-    bt, ls = calculateB(p, gh)
-    #print(bt)
-    #^^ betweeness score works
-
-    gh = removeEdge(bt, gh, ls)
-
-    #print(nx.is_connected(h))
-    #could do it until no longer connected
+    
     #nx.is_connected(h)
-    k = 5
-    while k > 0:
+    #k = ((len(gh.nodes))//(2/3) ) + 4
+    #k = (len(gh.nodes)) * 1.5
+    cps = nx.number_connected_components(gh) #num of components currently
+
+    while k > cps:
         
-        p = shortestPath(gh)
-    #print(p)
-    #^^shortestPath seems to work
+        bt = nx.edge_betweenness_centrality(gh) 
 
-        bt, ls = calculateB(p, gh)
-    #print(bt)
-    #^^ betweeness score works
+        gh = removeEdge(bt, gh)
 
-        gh = removeEdge(bt, gh, ls)
-        k = k - 1
 
+        cps = nx.number_connected_components(gh)
+
+    #what to return:
     et =  time.time()
     tTotal = et - st
+    com = showCommunity(gh)
+    current, peak = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    memory_used_kb = peak / 1024
+    return [com, tTotal, memory_used_kb]
+        
+
+#### GirvanNewman Method: ####
+# this is where all the code gets ran but with a TIME LIMIT
+# gh: the networkx graph
+# tm: time limit to run the algorithm ***
+# com: a dictionary of communities(key) and their respective nodes (value)
+# tTotal:  the total amount of time to run the code in seconds (float)
+# mem: the amount of memory used to run the code
+# return: com, tTotal, mem
+def GirvanNewman_T(gh,tm):
+    #where we run the whole thing!
+    
+    st = time.time()
+    tracemalloc.start()
+    
+    
+    
+    bt = nx.edge_betweenness_centrality(gh)
+    gh = removeEdge(bt, gh)
+
+    
+    #nx.is_connected(h)
+    #k = ((len(gh.nodes))//(2/3) ) + 4
+    #k = (len(gh.nodes)) * 1.5
+    #cps = nx.number_connected_components(gh) #num of components currently
+    #curr_time = datetime.datetime.now()
+    cur_time = time.time() - st
+    while cur_time < tm:
+        
+        bt = nx.edge_betweenness_centrality(gh) 
+
+        gh = removeEdge(bt, gh)
+        
+
+        cur_time = time.time() - st
+    #what to return:
+    et =  time.time()
+    tTotal = et - st
+    com = showCommunity(gh)
 
     current, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
     memory_used_kb = peak / 1024
 
-    return [showCommunity(gh), tTotal, memory_used_kb]
-        
-
-
-if __name__ == "__main__":
-    
-    
-    nds = list(range(15))
-    #nds = random.shuffle(nds)
-
-    for i in range(len(nds)):
-        t = nx.erdos_renyi_graph(nds[i], 0.5)
-        f, t = GirvanNewman(t)
-        print(f, "time: ", t)
+    return [com, tTotal, memory_used_kb]
 
