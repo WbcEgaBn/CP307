@@ -3,6 +3,7 @@
 import networkx as nx
 import random
 import time
+import tracemalloc
 #Girvan Newman:
 #compute the edge betweeness
 #identify and remove the edge with max betweeness
@@ -180,7 +181,7 @@ def GirvanNewman(gh):
     #where we run the whole thing!
     
     st = time.time()
-    
+    tracemalloc.start()
     
     
     p = shortestPath(gh)
@@ -212,7 +213,12 @@ def GirvanNewman(gh):
 
     et =  time.time()
     tTotal = et - st
-    return showCommunity(gh), tTotal
+
+    current, peak = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    memory_used_kb = peak / 1024
+
+    return [showCommunity(gh), tTotal, memory_used_kb]
         
 
 
