@@ -245,7 +245,11 @@ class Infomap():
         total_time = end_time - start_time
 
         # end memory tracking
-        memory_bytes = tracemalloc.get_traced_memory()
+        current, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
+
+        # convert units
+        memory_used_kb = peak / 1024
         
-        return retval, total_time, memory_bytes
+        return retval, total_time, memory_used_kb
+    
