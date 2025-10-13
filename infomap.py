@@ -251,5 +251,5 @@ class Infomap():
         # convert units
         memory_used_kb = peak / 1024
         
-        return retval, total_time, memory_used_kb
+        return [retval, total_time, memory_used_kb]
     

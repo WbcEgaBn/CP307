@@ -5,7 +5,7 @@ from sklearn.cluster import KMeans, SpectralClustering
 from sklearn import metrics
 import sklearn.datasets as ds
 from louvain import louvain_algorithm
-from girvan_newman import GirvanNewman
+from girvan_newman import GirvanNewman, GirvanNewman_T
 from infomap import Infomap
 import numpy as np
 
@@ -170,8 +170,11 @@ graphs = []
 intervals = [i for i in np.arange(0.001, 0.05, 0.0005)]
 for i in range(len(intervals)):
     graphs.append(create_k_means_graph(30, 5, 3)) #300 works for L, doesn't for G
+graphs_for_storage_tests = []
+for i in range(2, len(intervals), 1):
+    graphs_for_storage_tests.append(create_k_means_graph(2*i, 4, 3)) 
 
-def louvain_quality(intervals, t, t_intervals):
+def louvain_quality(intervals, t):
     louvain_quality = []
     louvain_communities = []
     louvain_execution_time = []
@@ -186,24 +189,28 @@ def louvain_quality(intervals, t, t_intervals):
         louvain_quality.append(compare)
         print("computing quality results for louvain...")
 
-    for t in range(t_intervals):
+    for time in intervals:
         s, clusters_ = graphs[intervals.index(time)]
         c = louvain_algorithm(s, time_limit=t)
         louvain_execution_time.append(c.get("execution_time"))
         print("computing t interval results and storage results for louvain...")
-        louvain_memory.append(c.get("memory_used_kb"))
 
+    for i in graphs_for_storage_tests:
+        s, clusters_ = graphs_for_storage_tests[graphs_for_storage_tests.index(i)]
+        c = louvain_algorithm(s)
+        #print(c)
+        louvain_memory.append(c.get("memory_used_kb"))
+        print("computing memory results for Girvan-Newman...")
     return louvain_quality, louvain_execution_time, louvain_memory
 
-def girvan_quality(intervals, t, t_intervals):
+def girvan_quality(intervals):
     girvan_quality = []
     girvan_communities = []
     girvan_execution_time = []
     girvan_memory = []
-
     for time in intervals:
         s, clusters_ = graphs[intervals.index(time)]
-        c = GirvanNewman(s)
+        c = GirvanNewman(s, len(clusters_))
         comm = c[0]
         girvan_communities.append(comm)
         girv_comm = list(comm.values())
@@ -211,26 +218,57 @@ def girvan_quality(intervals, t, t_intervals):
         girvan_quality.append(compare)
         print("computing quality results for Girvan-Newman...")
 
-    for t in range(t_intervals):
-        
+    for time in intervals:
         s, clusters_ = graphs[intervals.index(time)]
-        c = GirvanNewman(s)
+        c = GirvanNewman(s, len(clusters_))
         exec_time = c[1]
-        memory_used = c[2]
-        girvan_execution_time.append(None)
-        print("computing t interval results and storage results for Girvan-Newman...")
-        girvan_memory.append(memory_used)
+        girvan_execution_time.append(exec_time)
+        print("computing t interval results for Girvan-Newman...")
 
+    for i in graphs_for_storage_tests:
+        s, clusters_ = graphs_for_storage_tests[graphs_for_storage_tests.index(i)]
+        c2 = GirvanNewman_T(s, time)
+        memory_used = c2[2]
+        girvan_memory.append(memory_used)
+        print("computing memory results for Girvan-Newman...")
     return girvan_quality, girvan_execution_time, girvan_memory
 
-def infomap_quality():
-    pass
+def infomap_quality(intervals):
     infomap_quality = []
     infomap_communities = []
     infomap_execution_time = []
     infomap_memory = []
 
-    #for time in intervals:
+    for time in intervals:
+        s, clusters_ = graphs[intervals.index(time)]
+        map = Infomap(s, weight=False)
+        c = map.run()
+        comm = c[0]
+        infomap_communities.append(comm)
+        info_comm = list(comm.values())
+        compare = cluster_compare(clusters_, info_comm)
+        infomap_quality.append(compare)
+        print("computing quality results for Infomap...")
+        #for time in intervals:
+
+    for time in intervals:
+        s, clusters_ = graphs[intervals.index(time)]
+        map = Infomap(s, False)
+        c = map.run()
+        exec_time = c[1]
+        infomap_execution_time.append(exec_time)
+        print("computing t interval results for Infomap...")
+
+    for i in graphs_for_storage_tests:
+        s, clusters_ = graphs_for_storage_tests[graphs_for_storage_tests.index(i)]
+        map = Infomap(s, False)
+        c = map.run()
+        memory_used = c[2]
+        infomap_memory.append(memory_used)
+        print("computing memory results for Infomap...")
+    # infomap_memory.pop(0)
+    # infomap_memory.pop(0)
+    return infomap_quality, infomap_execution_time, infomap_memory
 
 def cluster_compare(actual, predicted):
     correspondence = {}
@@ -251,13 +289,45 @@ def cluster_compare(actual, predicted):
         result.append(sum(diff))
     return sum(result)
 
-Lquality, Ltime, Lmemory = louvain_quality(intervals, 5, 7)
-Gquality, Gtime, Gmemory = girvan_quality(intervals, 5, 7)
+t_intervals = 7
+t = 5
+Lquality, Ltime, Lmemory = louvain_quality(intervals, t)
+Gquality, Gtime, Gmemory = girvan_quality(intervals)
+Iquality, Itime, Imemory = infomap_quality(intervals) # takes a while
 
-plt.title("quality/time")
-plt.scatter(intervals, Lquality, label="l")
-plt.scatter(intervals, Gquality, label="g")
+#plt.subplot(1, 3, 1)
+plt.title("quality/time with K-means")
+plt.scatter(intervals, Lquality, label="Louvain")
+plt.scatter(intervals, Gquality, label="Girvan-Newman")
+plt.scatter(intervals, Iquality, label="Infomap")
 plt.xlabel("time (s)")
 plt.ylabel("quality percent error")
 plt.legend()
+
+#plt.subplot(1, 3, 1)
+plt.title("communities/time with K-means")
+x_count = np.arange(0, t_intervals, 1).tolist()
+print(x_count, Gtime)
+print(len(intervals), len(Ltime))
+plt.scatter(intervals, Ltime, label="Louvain")
+plt.scatter(intervals, Gtime, label="Girvan-Newman")
+plt.scatter(intervals, Itime, label="Infomap")
+plt.xlabel("time (s)")
+plt.ylabel("number of communities")
+plt.legend()
+
+#plt.show()
+
+#plt.subplot(1, 3, 2)
+plt.title("storage used/graph size with K-means")
+x_ = np.arange(0, len(graphs_for_storage_tests), 1).tolist()
+print(len(x_), len(Imemory))
+plt.scatter(x_, Lmemory, label="Louvain") 
+plt.scatter(x_, Gmemory, label="Girvan-Newman")
+print(intervals, Gmemory)
+plt.scatter(x_, Imemory, label="Infomap")
+plt.xlabel("graph size (nodes)")
+plt.ylabel("storage used (KB)")
+plt.legend()
+
 plt.show()
