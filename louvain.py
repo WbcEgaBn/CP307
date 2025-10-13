@@ -3,7 +3,7 @@ import tracemalloc
 import copy
 import networkx as nx
 
-def louvain_algorithm(G, delta_q=0.001, time_limit=None):
+def louvain_algorithm(G, delta_q=0.00001, time_limit=None):
     """
     Args:
         G: NetworkX graph
@@ -230,7 +230,7 @@ def build_community_graph(G, node_to_community):
 G = nx.gnp_random_graph(n=200, p=0.05)
 
 # Run with delta_q threshold
-result = louvain_algorithm(G, delta_q=0.0001, time_limit=1)
+result = louvain_algorithm(G, time_limit=1)
 
 print(f"Communities: {len(result['communities'])}")
 communities = result['communities']
