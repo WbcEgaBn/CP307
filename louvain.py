@@ -181,7 +181,11 @@ def calculate_modularity_gain(G, node, target_comm, node_to_community, m):
     # Modularity gain formula
     # Δ Q = [ki_in / (2m)] - [(sigma_tot * ki) / (2m)²]
     # Simplified: Δ Q = [ki_in - (sigma_tot * ki) / (2m)] / m
-    gain = (ki_in - (sigma_tot * ki) / (2 * m)) / m
+    if m != 0: 
+        gain = (ki_in - (sigma_tot * ki) / (2 * m)) / m
+    else: 
+        gain = (ki_in - (sigma_tot * ki) / (2 * 0.001)) / 0.001; 
+        # this fixes divide by 0 error when plotting quality/difficulty -j
     
     return gain
 
