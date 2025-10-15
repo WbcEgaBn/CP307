@@ -436,11 +436,7 @@ def GirvanNewman_T(gh,tm):
     gh = removeEdge(bt, gh)
 
     
-    #nx.is_connected(h)
-    #k = ((len(gh.nodes))//(2/3) ) + 4
-    #k = (len(gh.nodes)) * 1.5
-    #cps = nx.number_connected_components(gh) #num of components currently
-    #curr_time = datetime.datetime.now()
+    
     cur_time = time.time() - st
     while cur_time < tm:
         
