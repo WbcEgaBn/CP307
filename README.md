@@ -50,4 +50,22 @@ This file provides a series of tests that are based off the **Louvain Method**, 
 * example: ```louvain_algorithm(Graph, delta_q=0.5, time_limit=0.05)```
 
 
+## To build Infomap 
+* Args:
+    - ```G```: NetworkX graph
+    - ```weight```: Boolean indicating if the graph is weighted
+
+* example: ```infomap(G, weight)```
+
+## To run Infomap 
+* Args:
+    - ```self```: Infomap object
+    - ```iters```: The number of outer passes over all nodes
+   
+* Returns:
+    - ```dict```: Contains 'retval', 'total_time', 'memory_used_kb'
+
+* example: ```infomap.run(iters=10)```
+
+
 ### Credits go to our wonderful project members :)
