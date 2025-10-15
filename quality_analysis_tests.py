@@ -8,105 +8,148 @@ from louvain import louvain_algorithm
 from girvan_newman import GirvanNewman, GirvanNewman_T
 from infomap import Infomap
 import numpy as np
+from sys import argv
 
+# enter the parameters for the graph you want to see
+# {plot_type}, {cluster_method}, {shapes} {dense_or_sparse (only if plot type is q/t)}
+# more details are in the readme
 
-def create_random_graph(node_num, l, h):
-    edge_num = int(node_num*random.randint(l, h))
-    g = nx.Graph()
-    nodes = random.sample(range(0, node_num), node_num)
-    g.add_nodes_from(nodes)
-    edges = []
-    for i in range(edge_num):
-        v_a = random.sample(nodes, 1)[0]
-        v_b = random.sample(nodes, 1)[0]
-        temp = tuple([v_a, v_b])
-        if v_a != v_b and temp not in edges:
-            edges.append(temp)
-        else:
-            i -= 1
-    print(nodes, edges)  
-    elements = set(element for tup in edges for element in tup)
-    for node in nodes:
-        if node not in elements:
-            v_a = random.sample(nodes, 1)[0]
-            print("nodes", nodes)
-            print("node", node)
-            e = nodes.pop(nodes.index(node))
-            print("nodes", nodes)
-            v_b = random.sample(nodes, 1)[0]
-            nodes.append(e)
-            temp = tuple([v_a, v_b])
-            edges.append(temp)
-    g.add_edges_from(edges)
-    if nx.is_connected(g):
-        #nx.draw_networkx(g)
-        return g
-    else:
-        create_random_graph(node_num, l, h)
-
-
-def get_percent_of_list(l, p):
-    num_to_sample = int(len(l) * p)
-    return random.sample(l, k=num_to_sample)
-
-def create_k_means_graph(sample_size, cluster_num, shape, percent_of_original):
+def create_k_means_graph(sample_size, cluster_num, shape, p=1):
+    """
+    args: 
+        sample_size:
+            Number of nodes to create a graph.
+        cluster_num:
+            The number of clusters there will be in a given plot.
+        shape:
+            Shape that will be drawn when plotted, can be blobs, a moons, or circles.
+        p:
+            Probability of inter-clustering. 
+            0 is only connections between a node's own cluster.
+            1 can have connections with any cluster.
+    return:
+        g:
+            A NetworkX graph.
+        cluster_points:
+            The points on the plot that are sorted by which cluster they are in.
+    """
     kmeans = KMeans(n_clusters=cluster_num, random_state=0, n_init=10)
     match shape:
-        case 1:
+        case "make_blobs":
             X, _ = ds.make_blobs(n_samples=sample_size, centers=cluster_num, cluster_std=0.60, random_state=0)
-            title = "make_blobs"
-        case 2:
+        case "make_moons":
             X, _ = ds.make_moons(n_samples=sample_size, noise=0.1)
-            title = "make_moons"
-        case 3:
+        case "make_circles":
             X, _ = ds.make_circles(n_samples=sample_size, factor=0.33, noise=0.1)
-            title = "make_circles"
-        case 4:
-            X, _ = ds.make_friedman1(n_features=sample_size, noise=0.1)
-            title = "make_friedman"
 
-    clustering = SpectralClustering(n_clusters=cluster_num, random_state=0, n_init=10)
+    clustering = SpectralClustering(n_clusters=cluster_num, random_state=0, n_init=10) 
+    # spectral clustering is needed to get some labels
+    # these labels do not affect the plots
     kmeans.fit(X)
+    clustering.fit(X)
+    cluster_points = [[] for i in range(cluster_num)]
+    node_positions = {}
+    labels = clustering.labels_
+    g = nx.Graph() 
+    for i, (x, y) in enumerate(X): # loop through each data point and get the index and (x, y)
+        label = labels[i]
+        g.add_node(i, pos=(x, y), cluster=label)
+        node_positions[i] = (x, y) # set node positions for if we want to view the graph
+        cluster_points[label].append(i)
+    for label in range(cluster_num): # loops through the entire cluster 
+        nodes = cluster_points[label]
+        for node in nodes:# loops through each node
+            for _ in range(max(1, cluster_num // 2)):
+                target = random.choice(nodes)
+                if target != node: # connects nodes together and makes the distance between them their weight
+                    x1, y1 = node_positions[node]
+                    x2, y2 = node_positions[target]
+                    dist = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
+                    g.add_edge(node, target, weight=dist)
+    inter_edges_per_cluster = max(1, cluster_num // 2) # you don't want to have more edges than nodes
+    for i in range(cluster_num):
+        for k in range(inter_edges_per_cluster):
+            if random.random() < p: # here if random < p, it will create a connection to a node outside its own cluster
+                src = random.choice(cluster_points[i])
+                other_clusters = [j for j in range(cluster_num) if j != i] # loops through and adds all the clusters that we aren't in
+                tgt_cluster = random.choice(other_clusters)
+                tgt = random.choice(cluster_points[tgt_cluster])
+                x1, y1 = node_positions[src]
+                x2, y2 = node_positions[tgt]
+                dist = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5 # similarly, this connects the nodes and considers its weight
+                g.add_edge(src, tgt, weight=dist)
+    colors = [labels[i] for i in range(len(X))] # colors for if we want to view
+    # nx.draw_networkx(
+    #     g,
+    #     pos=node_positions,
+    #     node_color=colors,
+    #     node_size=40,
+    #     cmap=plt.cm.viridis,
+    #     with_labels=False
+    # )
+    # plt.show() # to view the graphs uncomment
+    return g, cluster_points
+
+def create_spectral_graph(sample_size, cluster_num, shape, p=0.33):
+    """
+    args: 
+        sample_size:
+            Number of nodes to create a graph.
+        cluster_num:
+            The number of clusters there will be in a given plot.
+        shape:
+            Shape that will be drawn when plotted, can be blobs, a moons, or circles.
+        p:
+            Probability of inter-clustering. 
+            0 is only connections between a node's own cluster.
+            1 can have connections with any cluster.
+    return:
+        g:
+            A NetworkX graph.
+        cluster_points:
+            The points on the plot that are sorted by which cluster they are in.
+    """
+    match shape:
+        case "make_blobs":
+            X, _ = ds.make_blobs(n_samples=sample_size, centers=cluster_num, cluster_std=0.60, random_state=0)
+        case "make_moons":
+            X, _ = ds.make_moons(n_samples=sample_size, noise=0.1)
+        case "make_circles":
+            X, _ = ds.make_circles(n_samples=sample_size, factor=0.33, noise=0.1)
+    clustering = SpectralClustering(n_clusters=cluster_num, gamma=10)
     clustering.fit(X)
     labels = clustering.labels_
     cluster_points = [[] for i in range(cluster_num)]
     node_positions = {}
     g = nx.Graph()
-    for i, (x, y) in enumerate(X):
+    for i, (x, y) in enumerate(X): # loop through each data point and get the index and (x, y)
         label = labels[i]
         g.add_node(i, pos=(x, y), cluster=label)
-        node_positions[i] = (x, y)
+        node_positions[i] = (x, y) # set node positions for if we want to view the graph
         cluster_points[label].append(i)
-    for label in range(int(cluster_num*percent_of_original)):
+    for label in range(cluster_num): # loops through the entire cluster 
         nodes = cluster_points[label]
-    #     nodes = get_percent_of_list(cluster_points[label], percent_of_original) + get_percent_of_list([
-    # [sub_list for sub_list in inner_list if sub_list != label] for inner_list in cluster_points], (1-percent_of_original))
-# + cluster_points[random.randint(0, cluster_num)] own points + other points
-        print(nodes)
-        for node in nodes:
-            for _ in range(max(1, (cluster_num) // 2)):
+        for node in nodes: # loops through each node
+            for _ in range(max(1, cluster_num // 2)):
                 target = random.choice(nodes)
-                if target != node:
+                if target != node: # connects nodes together and makes the distance between them their weight
                     x1, y1 = node_positions[node]
-                    print("target", target)
                     x2, y2 = node_positions[target]
                     dist = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
                     g.add_edge(node, target, weight=dist)
-    inter_edges_per_cluster = max(1, cluster_num // 2)
-    for i in range(int(cluster_num*(1-percent_of_original))):
-    #     nodes = get_percent_of_list(cluster_points[label], (1-percent_of_original)) + get_percent_of_list([
-    # [sub_list for sub_list in inner_list if sub_list != label] for inner_list in cluster_points], (percent_of_original))
+    inter_edges_per_cluster = max(1, cluster_num // 2) # you don't want to have more edges than nodes
+    for i in range(cluster_num): 
         for k in range(inter_edges_per_cluster):
-            src = random.choice(cluster_points[i])#random.choice(cluster_points[i]) # pick a cluster to start an edge from
-            # pick a different cluster
-            other_clusters = [j for j in range(cluster_num) if j != i] 
-            tgt_cluster = random.choice(other_clusters)
-            tgt = random.choice(cluster_points[tgt_cluster])
-            x1, y1 = node_positions[src]
-            x2, y2 = node_positions[tgt]
-            dist = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
-            g.add_edge(src, tgt, weight=dist)
-    colors = [labels[i] for i in range(len(X))]
+            if random.random() < p: # here if random < p, it will create a connection to a node outside its own cluster
+                src = random.choice(cluster_points[i])
+                other_clusters = [j for j in range(cluster_num) if j != i] # loops through and adds all the clusters that we aren't in
+                tgt_cluster = random.choice(other_clusters)
+                tgt = random.choice(cluster_points[tgt_cluster])
+                x1, y1 = node_positions[src]
+                x2, y2 = node_positions[tgt]
+                dist = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5 # similarly, this connects the nodes and considers its weight
+                g.add_edge(src, tgt, weight=dist)
+    colors = [labels[i] for i in range(len(X))] # colors for if we want to view
     # nx.draw_networkx(
     #     g,
     #     pos=node_positions,
@@ -115,222 +158,259 @@ def create_k_means_graph(sample_size, cluster_num, shape, percent_of_original):
     #     cmap=plt.cm.viridis,
     #     with_labels=False
     # )
-    # plt.show()
+    # plt.show() # to view the graphs uncomment
     return g, cluster_points
 
-def create_spectral_graph(sample_size, cluster_num, shape):
+def create_dense_or_sparse_graph(sample_size, cluster_num, shape): 
+    """
+    args: 
+        sample_size:
+            Number of nodes to create a graph.
+        cluster_num:
+            The number of clusters there will be in a given plot.
+        shape:
+            Shape that will be drawn when plotted, can be blobs, a moons, or circles.
+
+    return:
+        g:
+            A NetworkX graph.
+        cluster_points:
+            The points on the plot that are sorted by which cluster they are in.
+    """
+    if argv[4] == "d": # take 5th parameter from command line
+        g = nx.dense_gnm_random_graph(30, random.randint(100, 200)) #435=30c2 but 435 really takes a long time
+    elif argv[4] == "s":
+        g = nx.dense_gnm_random_graph(30, random.randint(30, 100))
     match shape:
-        case 1:
+        case "make_blobs":
             X, _ = ds.make_blobs(n_samples=sample_size, centers=cluster_num, cluster_std=0.60, random_state=0)
-            title = "make_blobs"
-        case 2:
+        case "make_moons":
             X, _ = ds.make_moons(n_samples=sample_size, noise=0.1)
-            title = "make_moons"
-        case 3:
+        case "make_circles":
             X, _ = ds.make_circles(n_samples=sample_size, factor=0.33, noise=0.1)
-            title = "make_circles"
-        case 4:
-            X, _ = ds.make_friedman1(n_features=sample_size, noise=0.1)
-            title = "make_friedman"
     clustering = SpectralClustering(n_clusters=cluster_num, gamma=10)
     clustering.fit(X)
     labels = clustering.labels_
-    cluster_points = []
-    node_positions = {}
-    g = nx.Graph()
-    g = nx.Graph()
+    cluster_points = [[] for i in range(cluster_num)]
     for i, (x, y) in enumerate(X):
         label = labels[i]
         g.add_node(i, pos=(x, y), cluster=label)
-        node_positions[i] = (x, y)
         cluster_points[label].append(i)
-    for label in range(cluster_num):
-        nodes = cluster_points[label]
-        for node in nodes:
-            for _ in range(max(1, cluster_num // 2)):
-                target = random.choice(nodes)
-                if target != node:
-                    x1, y1 = node_positions[node]
-                    x2, y2 = node_positions[target]
-                    dist = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
-                    g.add_edge(node, target, weight=dist)
-    inter_edges_per_cluster = max(1, cluster_num // 2)
-    for i in range(cluster_num):
-        for _ in range(inter_edges_per_cluster):
-            src = random.choice(cluster_points[i])
-            # pick a different cluster
-            other_clusters = [j for j in range(cluster_num) if j != i]
-            tgt_cluster = random.choice(other_clusters)
-            tgt = random.choice(cluster_points[tgt_cluster])
-            x1, y1 = node_positions[src]
-            x2, y2 = node_positions[tgt]
-            dist = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
-            g.add_edge(src, tgt, weight=dist)
-    colors = [labels[i] for i in range(len(X))]
-    # nx.draw_networkx(
-    #     g,
-    #     pos=node_positions,
-    #     node_color=colors,
-    #     node_size=40,
-    #     cmap=plt.cm.viridis,
-    #     with_labels=False
-    # )
-    #plt.show()
-    return g, cluster_points
+    return g, cluster_points 
+# similar to the other methods, this must also return a graph, and cluster 
+# points, otherwise, the quality methods would need to be edited
 
+# here is where I declare all of the lists you may be using in your tests
 graphs = []
-intervals = [i for i in np.arange(0.001, 0.05, 0.001)]
-for i in range(len(intervals)):
-    graphs.append(create_k_means_graph(30, 5, 3, 1)) #300 works for L, doesn't for G
 graphs_for_storage_tests = []
-for i in range(2, len(intervals), 1):
-    graphs_for_storage_tests.append(create_k_means_graph(2*i, 4, 3, 1))
 graphs_for_difficulty_tests = []
-for i in np.arange(1, 0, -.01):
-    graphs_for_difficulty_tests.append(create_k_means_graph(30, 5, 3, i))
+intervals = [i for i in np.arange(0.001, 0.05, 0.001)] # need to use np.arange() since range() doesn't support floats
+print(argv)
+
+match argv[1]: # argv[1] = gets plot type
+    case "q/t":
+        for i in range(len(intervals)):
+            if argv[2] == "k-m": # argv[2] = cluster type
+                if len(argv) == 4:
+                    graphs.append(create_k_means_graph(30, 5, argv[3], 1)) #300 works for L, doesn't for G
+                else:
+                    graphs.append(create_dense_or_sparse_graph(30, 5, argv[3])) #argv[3] = shape
+            elif argv[2] == "sc":
+                graphs.append(create_spectral_graph(30, 5, argv[3], 1))
+                if len(argv) == 4:
+                    graphs.append(create_spectral_graph(30, 5, argv[3], 1))
+                else:
+                    graphs.append(create_dense_or_sparse_graph(30, 5, argv[3]))
+    case "c/t":
+        for i in intervals:
+            graphs.append(create_k_means_graph(30, 5, argv[2], 1))
+    case "KB/g":
+        for i in range(2, len(intervals), 1): 
+            graphs_for_storage_tests.append(create_k_means_graph(2*i, 4, argv[3], 1)) # increases node size by 2 each time
+    case "q/gd":
+        for i in np.arange(1, 0, -.01):
+            graphs_for_difficulty_tests.append(create_k_means_graph(30, 5, argv[3], i)) # i = p
 
 def louvain_quality(intervals):
+    """
+    args:
+        intervals:
+            The time intervals for which funcitons should recalculate.
+    return:
+        louvain_quality:
+            A list of the quality which was computed using metrics.rand_score() from sklearn.
+        louvain_execution_time:
+            A list of number of communities after a certain amount of time.
+        louvain_memory:
+            A list of the amount of storage it takes to compute the communities for a graph.
+        louvain_difficulty:
+            A list of the quality where the graphs were in increasing difficulty.
+    """
     louvain_quality = []
     louvain_communities = []
     louvain_execution_time = []
     louvain_memory = []
     louvain_difficulty = []
     for time in intervals:
-        s, clusters_ = graphs[intervals.index(time)]
+        if argv[1] != "q/t":
+            break
+        s, clusters_ = graphs[intervals.index(time)] # get the graph based on which test we are doing, q/t = graphs[]
         c = louvain_algorithm(s)
-        louvain_communities.append(c.get('communities'))
-        louv_ = list(c.get('communities').items())
-        louv_comm = list(c.get('communities').values())
-        compare_true =  [None for i in range(len(s.nodes()))]#{"a": [0, 1, 2, 7], 1: [8, 9], 2:[3, 4, 5, 6]}
-        
-        compare_pred = [None for i in range(len(s.nodes()))]
-        for l in clusters_:
-            for i in l:
-                compare_true[i] = clusters_.index(l)
-        print(louv_)
-        for key, value in louv_:
-            for i in value:
-                compare_pred[i] = key
-        #print("compare true", compare_true)
-        #print("compare pred", compare_pred)
-        compare_score = metrics.rand_score(compare_true, compare_pred)
-        #print(compare_score)#cluster_compare(clusters_, louv_comm)
-        louvain_quality.append(compare_score)
-        print("computing quality results for louvain...")
-
-
-    for time in intervals:
-        print("len intervals", len(intervals))
-        s, clusters_ = graphs[intervals.index(time)]
-        c = louvain_algorithm(s, time_limit=time)
-        print(c)
-        if "graph_at_time_limit" in c:
-            louvain_execution_time.append(len(c.get("graph_at_time_limit").get("communities")))
-        else:
-            louvain_execution_time.append(len(c.get("communities")))
-        print(f"computing t interval results and storage results for louvain... {time}")
-
-    for i in graphs_for_storage_tests:
-        s, clusters_ = graphs_for_storage_tests[graphs_for_storage_tests.index(i)]
-        c = louvain_algorithm(s)
-        #print(c)
-        louvain_memory.append(c.get("memory_used_kb"))
-        print("computing memory results for louvain...")
-    
-    for i in graphs_for_difficulty_tests:
-        s, clusters_ = graphs_for_difficulty_tests[graphs_for_difficulty_tests.index(i)]
-        c = louvain_algorithm(s)
-        louvain_communities.append(c.get('communities'))
-        louv_ = list(c.get('communities').items())
+        louvain_communities.append(c.get('communities')) # gets the communities 
+        louv_ = list(c.get('communities').items()) # k, v pairs
         compare_true =  [None for i in range(len(s.nodes()))]
         compare_pred = [None for i in range(len(s.nodes()))]
         for l in clusters_:
             for i in l:
+                compare_true[i] = clusters_.index(l) # turn communities into a format rand_score can use
+        for key, value in louv_:
+            for i in value:
+                compare_pred[i] = key # same idea here
+        compare_score = metrics.rand_score(compare_true, compare_pred) # this computes it
+        louvain_quality.append(compare_score) 
+        print("computing quality results for louvain...")
+
+    for time in intervals:
+        if argv[1] != "c/t":
+            break
+        s, clusters_ = graphs[intervals.index(time)] # get the graph for c/t tests which is graphs[] too
+        c = louvain_algorithm(s, time_limit=time)
+        if "graph_at_time_limit" in c:
+            louvain_execution_time.append(len(c.get("graph_at_time_limit").get("communities"))) # get the communitites part of the dictonary
+        else:
+            louvain_execution_time.append(len(c.get("communities"))) # if the cutoff is after the algorithm is done, it does not return a "graph_at_time_limit"
+        print(f"computing t interval results and storage results for louvain...")
+
+    for i in graphs_for_storage_tests:
+        if argv[1] != "KB/g":
+            break
+        s, clusters_ = graphs_for_storage_tests[graphs_for_storage_tests.index(i)] # storage tests need their own graph because they differ in size
+        c = louvain_algorithm(s)
+        louvain_memory.append(c.get("memory_used_kb"))
+        print("computing memory results for louvain...")
+    
+    for i in graphs_for_difficulty_tests:
+        if argv[1] != "q/gd":
+            break
+        s, clusters_ = graphs_for_difficulty_tests[graphs_for_difficulty_tests.index(i)]
+        c = louvain_algorithm(s)
+        louvain_communities.append(c.get('communities'))
+        louv_ = list(c.get('communities').items())
+        compare_true =  [None for i in range(len(s.nodes()))] # here we do the same thing we did for quality test, but with a different set of graphs
+        compare_pred = [None for i in range(len(s.nodes()))]
+        for l in clusters_:
+            for i in l:
                 compare_true[i] = clusters_.index(l)
-        print(louv_)
         for key, value in louv_:
             for i in value:
                 compare_pred[i] = key
-        #print("compare true", compare_true)
-        #print("compare pred", compare_pred)
         compare_score = metrics.rand_score(compare_true, compare_pred)
-        #print(compare_score)#cluster_compare(clusters_, louv_comm)
         louvain_difficulty.append(compare_score)
         print("computing difficulty results for louvain...")
-    return louvain_quality, louvain_execution_time, louvain_memory, louvain_difficulty
+    
+    match argv[1]:
+        case "q/t":
+            return louvain_quality
+        case "c/t":
+            return louvain_execution_time
+        case "KB/g":
+            return louvain_memory
+        case "q/gd":
+            return louvain_difficulty
 
 def girvan_quality(intervals):
+    """
+    args:
+        intervals:
+            The time intervals for which funcitons should recalculate.
+    return:
+        girvan_quality:
+            A list of the quality which was computed using metrics.rand_score() from sklearn.
+        girvan_execution_time:
+            A list of number of communities after a certain amount of time.
+        girvan_memory:
+            A list of the amount of storage it takes to compute the communities for a graph.
+        girvan_difficulty:
+            A list of the quality where the graphs were in increasing difficulty.
+    """
     girvan_quality = []
     girvan_communities = []
     girvan_execution_time = []
     girvan_memory = []
     girvan_difficulty = []
     for time in intervals:
+        if argv[1] != "q/t":
+            break
         s, clusters_ = graphs[intervals.index(time)]
-        c = GirvanNewman(s, len(clusters_))
-        comm = c[0]
+        c = GirvanNewman(s, len(clusters_)) 
+        comm = c[0] # the c[0] part are the communities
         girvan_communities.append(comm)
-        girv_ = comm#list(c.get('communities').items())
-        #print(comm)
-        girv_comm = list(comm.values())
-        for key, value_set in comm.items():
-            girv_[key] = list(value_set)
-        print(girv_)
-        compare_true =  [None for i in range(len(s.nodes()))]#{"a": [0, 1, 2, 7], 1: [8, 9], 2:[3, 4, 5, 6]}
+        girv_ = comm
+        for key, value_set in comm.items(): # k, v pairs
+            girv_[key] = list(value_set) # convert set to a list
+        compare_true =  [None for i in range(len(s.nodes()))]
         compare_pred = [None for i in range(len(s.nodes()))]
         for l in clusters_:
             for i in l:
-                compare_true[i] = clusters_.index(l)
+                compare_true[i] = clusters_.index(l) # set up in a format for metric.rand_score
         for key, value in girv_.items():
             for i in value:
-                compare_pred[i] = key
-        print("compare true", compare_true)
-        print("compare pred", compare_pred)
+                compare_pred[i] = key # set up in a format for metric.rand_score
         compare_score = metrics.rand_score(compare_true, compare_pred)
         girvan_quality.append(compare_score)
         print("computing quality results for Girvan-Newman...")
 
     for time in intervals:
-        
+        if argv[1] != "c/t":
+            break
         s, clusters_ = graphs[intervals.index(time)]
         c = GirvanNewman(s, len(clusters_))
-        exec_time = len(c[0])
-        print(c)
+        exec_time = len(c[0]) # the leght of c[0], that is, len(keys) is the number of communities
         girvan_execution_time.append(exec_time)
         print("computing t interval results for Girvan-Newman...")
 
     for i in graphs_for_storage_tests:
-        s, clusters_ = graphs_for_storage_tests[graphs_for_storage_tests.index(i)]
+        if argv[1] != "KB/g":
+            break
+        s, clusters_ = graphs_for_storage_tests[graphs_for_storage_tests.index(i)] # storage tests have their own graph
         c2 = GirvanNewman_T(s, time)
-        memory_used = c2[2]
+        memory_used = c2[2] # c2[2] is the memory part
         girvan_memory.append(memory_used)
         print("computing memory results for Girvan-Newman...")
 
     for i in graphs_for_difficulty_tests:
-        s, clusters_ = graphs_for_difficulty_tests[graphs_for_difficulty_tests.index(i)]
+        if argv[1] != "q/gd":
+            break
+        s, clusters_ = graphs_for_difficulty_tests[graphs_for_difficulty_tests.index(i)] # difficulty tests have their own graph
         c = GirvanNewman(s, len(clusters_))
-        comm = c[0]
+        comm = c[0] # c[0] is the dicitonary of communities
         girvan_communities.append(comm)
-        girv_ = comm#list(c.get('communities').items())
-        #print(comm)
-        girv_comm = list(comm.values())
-        for key, value_set in comm.items():
+        girv_ = comm
+        for key, value_set in comm.items():# k, v pairs
             girv_[key] = list(value_set)
         print(girv_)
-        compare_true =  [None for i in range(len(s.nodes()))]#{"a": [0, 1, 2, 7], 1: [8, 9], 2:[3, 4, 5, 6]}
+        compare_true =  [None for i in range(len(s.nodes()))]
         compare_pred = [None for i in range(len(s.nodes()))]
         for l in clusters_:
             for i in l:
-                compare_true[i] = clusters_.index(l)
+                compare_true[i] = clusters_.index(l) # set up in a format for metric.rand_score
         for key, value in girv_.items():
             for i in value:
-                compare_pred[i] = key
+                compare_pred[i] = key # set up in a format for metric.rand_score
         print("compare true", compare_true)
         print("compare pred", compare_pred)
         compare_score = metrics.rand_score(compare_true, compare_pred)
         girvan_difficulty.append(compare_score)
         print("computing difficulty results for Girvan-Newman...")
-    return girvan_quality, girvan_execution_time, girvan_memory, girvan_difficulty
+    match argv[1]:
+        case "q/t":
+            return girvan_quality
+        case "c/t":
+            return girvan_execution_time
+        case "KB/g":
+            return girvan_memory
+        case "q/gd":
+            return girvan_difficulty
 
 def infomap_quality(intervals):
     infomap_quality = []
@@ -339,147 +419,105 @@ def infomap_quality(intervals):
     infomap_memory = []
     infomap_difficulty = []
     for time in intervals:
+        if argv[1] != "q/t":
+            break
         s, clusters_ = graphs[intervals.index(time)]
-        map = Infomap(s, weight=False)
+        map = Infomap(s, weight=False) # initalize object
         c = map.run()
         comm = c[0]
         infomap_communities.append(comm)
-        info_comm = list(comm.values())
-        compare_true =  [None for i in range(len(s.nodes()))]#{"a": [0, 1, 2, 7], 1: [8, 9], 2:[3, 4, 5, 6]}
+        compare_true =  [None for i in range(len(s.nodes()))]
         info_ = comm
         compare_pred = [None for i in range(len(s.nodes()))]
         for l in clusters_:
             for i in l:
-                compare_true[i] = clusters_.index(l)
-        print(info_)
+                compare_true[i] = clusters_.index(l) # set up in a format for metric.rand_score
         for key, value in info_.items():
             for i in value:
-                compare_pred[i] = key
-        #print("compare true", compare_true)
-        #print("compare pred", compare_pred)
+                compare_pred[i] = key # set up in a format for metric.rand_score
         compare_score = metrics.rand_score(compare_true, compare_pred)
         infomap_quality.append(compare_score)
         print("computing quality results for Infomap...")
-        #for time in intervals:
 
     for time in intervals:
+        if argv[1] != "c/t":
+            break
         s, clusters_ = graphs[intervals.index(time)]
-        map = Infomap(s, False)
+        map = Infomap(s, False) # initalize object
         c = map.run()
-        exec_time = c[1]
-        print(c)
         infomap_execution_time.append(len(c[0]))
         print("computing t interval results for Infomap...")
 
-    # for i in graphs_for_storage_tests:
-    #     s, clusters_ = graphs_for_storage_tests[graphs_for_storage_tests.index(i)]
-    #     map = Infomap(s, False)
-    #     c = map.run()
-    #     memory_used = c[2]
-    #     infomap_memory.append(memory_used)
-    #     print(f"computing memory results for Infomap... graph {graphs_for_storage_tests.index(i)}")
-    # infomap_memory.pop(0)
-    # infomap_memory.pop(0)
+    for i in graphs_for_storage_tests:
+        if argv[1] != "KB/g":
+            break
+        s, clusters_ = graphs_for_storage_tests[graphs_for_storage_tests.index(i)] # storage tests have their own graph
+        map = Infomap(s, False) # initalize object
+        c = map.run()
+        memory_used = c[2]
+        infomap_memory.append(memory_used)
+        print(f"computing memory results for Infomap... graph {graphs_for_storage_tests.index(i)}/{len(graphs_for_storage_tests)}")
 
     for i in graphs_for_difficulty_tests:
-        s, clusters_ = graphs_for_difficulty_tests[graphs_for_difficulty_tests.index(i)]
-        map = Infomap(s, weight=False)
+        if argv[1] != "q/gd":
+            break
+        s, clusters_ = graphs_for_difficulty_tests[graphs_for_difficulty_tests.index(i)] # difficulty tests have their own graph
+        map = Infomap(s, weight=False) # initalize object
         c = map.run()
         comm = c[0]
         infomap_communities.append(comm)
-        info_comm = list(comm.values())
-        compare_true =  [None for i in range(len(s.nodes()))]#{"a": [0, 1, 2, 7], 1: [8, 9], 2:[3, 4, 5, 6]}
+        compare_true =  [None for i in range(len(s.nodes()))]
         info_ = comm
         compare_pred = [None for i in range(len(s.nodes()))]
         for l in clusters_:
             for i in l:
-                compare_true[i] = clusters_.index(l)
+                compare_true[i] = clusters_.index(l) # set up in a format for metric.rand_score
         print(info_)
         for key, value in info_.items():
             for i in value:
-                compare_pred[i] = key
-        #print("compare true", compare_true)
-        #print("compare pred", compare_pred)
+                compare_pred[i] = key # set up in a format for metric.rand_score
         compare_score = metrics.rand_score(compare_true, compare_pred)
         infomap_difficulty.append(compare_score)
         print("computing difficulty results for Infomap...")
-    return infomap_quality, infomap_execution_time, infomap_memory, infomap_difficulty
 
-# def cluster_compare(actual, predicted):
-#     correspondence = {}
-#     for i, l in enumerate(predicted):
-#         result = []
-#         for other_list in actual:
-#             intersection = len(set(l) & set(other_list))
-#             union = len(set(l) | set(other_list))
-#             res = intersection / float(union) if union != 0 else 0
-#             result.append(res)
-#         correspondence[i] = max(result)
-#     result = []
-#     for i, actual_cluster in enumerate(actual):
-#         diff = []
-#         for num in actual_cluster:
-#             corr_value = correspondence.get(i, 0)
-#             diff.append(num - corr_value)
-#         result.append(sum(diff))
-#     return sum(result)
+    match argv[1]:
+        case "q/t":
+            return infomap_quality
+        case "c/t":
+            return infomap_execution_time
+        case "KB/g":
+            return infomap_memory
+        case "q/gd":
+            return infomap_difficulty
 
-Lquality, Ltime, Lmemory, Ldifficulty = louvain_quality(intervals)
-Gquality, Gtime, Gmemory, Gdifficulty = girvan_quality(intervals)
-Iquality, Itime, Imemory, Idifficulty = infomap_quality(intervals) # takes a while
-
-#plt.subplot(1, 3, 1)
-# plt.title("quality/time with K-means")
-# plt.scatter(intervals, Lquality, label="Louvain")
-# plt.scatter(intervals, Gquality, label="Girvan-Newman")
-# plt.scatter(intervals, Iquality, label="Infomap")
-# plt.xlabel("time (s)")
-# plt.ylabel("accuracy score")
-#plt.ylim(0, 1)
-# plt.legend()
-
-# plt.show()
-#plt.subplot(1, 3, 1)
-# plt.title("communities/time with 5 clusters")
-# x_count = np.arange(0, t_intervals, 1).tolist()
-# #print(x_count, Gtime)
-# print(len(intervals), len(Gtime))
-# plt.scatter(intervals, Ltime, label="Louvain")
-# plt.scatter(intervals, Gtime, label="Girvan-Newman")
-# plt.scatter(intervals, Itime, label="Infomap")
-# plt.xlabel("time (s)")
-# plt.ylabel("number of communities")
-# plt.ylim(0, 15)
-#plt.legend()
-
-#plt.show()
-
-#plt.subplot(1, 3, 2)
-# plt.title("storage used/graph size with K-means")
-# x_ = np.arange(0, len(graphs_for_storage_tests), 1).tolist()
-# print(len(x_), len(Imemory))
-# plt.scatter(x_, Lmemory, label="Louvain") 
-# plt.scatter(x_, Gmemory, label="Girvan-Newman")
-# print(intervals, Gmemory)
-# plt.scatter(x_, Imemory, label="Infomap")
-# plt.xlabel("graph size (nodes)")
-# plt.ylabel("storage used (KB)")
-# plt.legend()
-
-
-#fix, (ax1, ax2) = plt.subplot(1, 1, 1)
-plt.title("quality/graph difficulty")
-x_ = np.arange(1, 0, -.01).tolist()
-print(len(x_), len(Idifficulty))
-plt.scatter(x_, Ldifficulty, label="Louvain")
-plt.scatter(x_, Gdifficulty, label="Girvan-Newman")
-plt.scatter(x_, Idifficulty, label="Infomap")
-plt.xlabel("difficulty (p-r)")
-plt.ylabel("quality score")
-plt.xlim(1, 0)
-#plt.ylim(0, 1)
+# Here we run all the tests based off what you entered when you ran the program
+Louvain = louvain_quality(intervals)
+Girvan = girvan_quality(intervals)
+Info = infomap_quality(intervals)
+title = argv[1] + " " + argv[2] # title becomes what you passed in 
+match argv[1]:
+    case "q/t":
+        x = intervals
+        title += " " + argv[3]
+        if len(argv) == 5: title += " " + argv[4] # in the case you put "d or "s" 
+        plt.xlabel("time (s)")
+        plt.ylabel("quality score")
+    case "c/t":
+        x = intervals
+        plt.xlabel("time (s)")
+        plt.ylabel("number of communities")
+    case "KB/g":
+        x = np.arange(0, len(graphs_for_storage_tests), 1).tolist()
+        plt.xlabel("graph size (nodes)")
+        plt.ylabel("storage used (KB)")
+    case "q/gd":
+        x = np.arange(1, 0, -.01).tolist() 
+        plt.xlabel("difficulty (p=cluster independence)")
+        plt.ylabel("quality score")
+# standard plotting 
+plt.title(title)
+plt.scatter(x, Louvain, label="Louvain")
+plt.scatter(x, Girvan, label="Girvan-Newman")
+plt.scatter(x, Info, label="Infomap")
 plt.legend()
 plt.show()
-
-# Q/difficulty (p-r) change probability of connections between clusters and outside clusters
-# C/t 
