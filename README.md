@@ -14,7 +14,7 @@ This file provides a series of tests that are based off the **Louvain Method**, 
 ---
 
 ## To run
-```~ % python quality_analysis_tests.py {test_type}{cluster_method} {shapes} {dense_or_sparse (only if plot type is q/t)}```
+```~ % python quality_analysis_tests.py {test_type}{cluster_method} {shapes} {dense_or_sparse (this is optional ,only use if plot type is q/t)}```
 #### test_types 
 - ```q/t``` quality vs. time
 - ```c/t``` communities vs. time
