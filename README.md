@@ -69,8 +69,8 @@ This file provides a series of tests that are based off the **Louvain Method**, 
 
 ## To run Girvan Newman 
 - there are two methods that could be ran to run the whole method
-    - girvannewman(gh, k) (regular method)
-    - girvannewman_T(gh, tm) (used to place a time limit for running the algorithm)
+    - GirvanNewman(gh, k) (regular method)
+    - GirvanNewman_T(gh, tm) (used to place a time limit for running the algorithm)
 
 * Args: GirvanNewman(gh, k)
     - ```gh```: the networkx graph
