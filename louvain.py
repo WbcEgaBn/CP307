@@ -1,3 +1,4 @@
+from operator import truediv
 import time
 import tracemalloc
 import copy
@@ -45,6 +46,7 @@ def louvain_algorithm(G, delta_q=0.5, time_limit=None):
     while improved:
         stats['phases'] += 1
         improved = False
+        moved_any = False  
         
         # Phase 1: Move nodes to optimize modularity
         changed = True
@@ -95,9 +97,11 @@ def louvain_algorithm(G, delta_q=0.5, time_limit=None):
                 if best_comm != current_comm and best_gain > delta_q:
                     node_to_community[node] = best_comm
                     changed = True
-                    improved = True
+                    moved_any = True
                     stats['node_moves'] += 1
         
+        if not moved_any:
+            improved = True
         # Uncomment to enable Phase 2 (hierarchical aggregation)
         """
         # Phase 2: Build a new graph where each community becomes a node (aggregation) 
