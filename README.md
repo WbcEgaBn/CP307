@@ -63,9 +63,30 @@ This file provides a series of tests that are based off the **Louvain Method**, 
     - ```iters```: The number of outer passes over all nodes
    
 * Returns:
-    - ```dict```: Contains 'retval', 'total_time', 'memory_used_kb'
+    - ```tuple```: Contains 'retval', 'total_time', 'memory_used_kb'
 
 * example: ```infomap.run(iters=10)```
 
+## To run Girvan Newman 
+- there are two methods that could be ran to run the whole method
+    - girvannewman(gh, k) (regular method)
+    - girvannewman_T(gh, tm) (used to place a time limit for running the algorithm)
 
+* Args: GirvanNewman(gh, k)
+    - ```gh```: the networkx graph
+    - ```k```: The number of desired components
+   
+* Returns:
+    - ```dict```: Contains 'com', 'total_time', 'memory_used_kb'
+ * example: ```GirvanNewman(graph, 10)```
+      
+* Args: GirvanNewman_T(gh, tm)
+    - ```gh```: the networkx graph
+    - ```tm```: The time limit for running algorithm
+   
+* Returns:
+    - ```dict```: Contains 'com', 'total_time', 'memory_used_kb'
+* example: ```GirvanNewman_T(graph, 0.05)```
+
+  
 ### Credits go to our wonderful project members :)
