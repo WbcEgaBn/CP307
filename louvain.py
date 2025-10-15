@@ -8,7 +8,9 @@ def louvain_algorithm(G, delta_q=0.5, time_limit=None):
     """
     Args:
         G: NetworkX graph
-        delta_q: Minimum modularity gain threshold to accept a move (default: 0.001) the smaller the number the more communities
+        delta_q: Minimum modularity gain threshold to accept a move the 
+                 smaller the number the easier it is to form communities, 
+                 ie. larger communities
         time_limit: time limit in seconds to capture intermediate state
         
     Returns:
@@ -102,6 +104,7 @@ def louvain_algorithm(G, delta_q=0.5, time_limit=None):
         
         if not moved_any:
             improved = True
+        
         # Uncomment to enable Phase 2 (hierarchical aggregation)
         """
         # Phase 2: Build a new graph where each community becomes a node (aggregation) 
@@ -164,7 +167,7 @@ def calculate_modularity_gain(G, node, target_comm, node_to_community, m):
         m: Total weight of all edges in graph
         
     Returns:
-        The modularity gain (can be negative)
+        The modularity gain
     """
     # Calculate edges from node to target community
     ki_in = 0  # edges from node to nodes in target_comm
@@ -183,8 +186,6 @@ def calculate_modularity_gain(G, node, target_comm, node_to_community, m):
     ki = G.degree(node, weight='weight')
     
     # Modularity gain formula
-    # Δ Q = [ki_in / (2m)] - [(sigma_tot * ki) / (2m)²]
-    # Simplified: Δ Q = [ki_in - (sigma_tot * ki) / (2m)] / m
     if m != 0: 
         gain = (ki_in - (sigma_tot * ki) / (2 * m))
     else: 
@@ -233,28 +234,3 @@ def build_community_graph(G, node_to_community):
                 new_G.add_edge(comm_u, comm_v, weight=weight)
     
     return new_G
-
-"""
-G = nx.gnp_random_graph(n=200, p=0.05)
-
-# Run with delta_q threshold
-result = louvain_algorithm(G, time_limit=1)
-
-print(f"Communities: {len(result['communities'])}")
-communities = result['communities']
-for community_id, nodes in communities.items():
-    print(f"Community {community_id}: {nodes}")
-
-print(f"Execution Time: {result['execution_time']:.4f} seconds")
-print(f"Memory Used: {result['memory_used_kb']:.2f} KB ({result['memory_used_bytes']} bytes)")
-print(f"Number of Communities: {len(result['communities'])}")
-print(f"Statistics: {result['stats']}")
-
-if 'graph_at_time_limit' in result:
-    print(f"\nIntermediate state at {result['graph_at_time_limit']['elapsed_time']:.4f}s:")
-    print(f"Communities at time limit: {len(result['graph_at_time_limit']['communities'])}")
-    communities = result['graph_at_time_limit']['communities']
-    for community_id, nodes in communities.items():
-        print(f"Community {community_id}: {nodes}")
-
-"""
